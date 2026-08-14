@@ -26,10 +26,11 @@ class Settings(BaseSettings):
     rrf_k: int = 60  # reciprocal rank fusion constant
     min_relevance_score: float = 0.35  # pre-generation grounding gate
 
-    # Generation
-    llm_provider: str = "anthropic"  # or "openai"
-    llm_model: str = "claude-sonnet-4-6"
+    # Generation — Groq's free tier (OpenAI-compatible endpoint), no card needed
+    llm_provider: str = "groq"
+    llm_model: str = "llama-3.3-70b-versatile"
     llm_api_key: str = ""
+    groq_api_url: str = "https://api.groq.com/openai/v1/chat/completions"
     max_answer_tokens: int = 400
 
     # Guardrails
@@ -41,4 +42,4 @@ class Settings(BaseSettings):
     stage_timeout_seconds: float = 8.0
 
 
-settings = Settings()
+settings = Settings(
