@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Voice-Enabled RAG — HH Goa 2026</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
+  h1 { font-size: 1.3rem; }
+  button { font-size: 1rem; padding: 10px 18px; border-radius: 8px; border: none; cursor: pointer; margin-right: 8px; }
+  #recordBtn { background: #d64545; color: white; }
+  #recordBtn.recording { background: #7a1f1f; }
+  #textForm { margin-top: 16px; display: flex; gap: 8px; }
+  #textInput { flex: 1; padding: 8px; font-size: 1rem; }
+  #answer { margin-top: 24px; padding: 16px; background: #f5f5f5; border-radius: 8px; white-space: pre-wrap; }
+  .refused { color: #b34700; }
+  .sources { margin-top: 12px; font-size: 0.85rem; color: #555; }
+  .latency { margin-top: 8px; font-size: 0.8rem; color: #888; }
+</style>
+</head>
+<body>
+  <h1>Voice-Enabled RAG — HH Goa 2026</h1>
+  <p>Ask a question by voice or text. Answers are grounded in the MSMARCO-XI dataset, or refused if not confidently supported.</p>
+
+  <button id="recordBtn">🎙 Hold to talk</button>
+
+  <form id="textForm">
+    <input id="textInput" type="text" placeholder="...or type your question" />
+    <button type="submit">Ask</button>
+  </form>
+
+  <div id="answer"></div>
+
+  <script>
+    const API_BASE = window.location.hostname === "localhost" ? "http://localhost:8000" : "";
+    const answerEl = document.getElementById("answer");
+
+    function renderResponse(data) {
+      answerEl.innerHTML = "";
+      if (data.transcript) {
+        const t = document.createElement("div");
+        t.innerHTML = `<em>Heard:</em> "${data.transcript}" (confidence ${(data.stt_confidence ?? 0).toFixed(2)})`;
+        answerEl.appendChild(t);
+      }
+      const body = document.createElement("div");
+      if (data.refused) {
+        body.className = "refused";
+        body.textContent = "⚠ " + data.refusal_reason;
+      } else {
+        body.textContent = data.answer;
+      }
+      answerEl.appendChild(body);
+
+      if (data.sources && data.sources.length) {
+        const src = document.createElement("div");
+        src.className = "sources";
+        src.textContent = "Sources: " + data.sources.map(s => s.chunk.strategy + "#" + s.chunk.chunk_id.slice(0, 8)).join(", ");
+        answerEl.appendChild(src);
+      }
+
+      const lat = document.createElement("div");
+      lat.className = "latency";
+      lat.textContent = `Total latency: ${data.total_latency_ms?.toFixed(1)}ms | ` +
+        Object.entries(data.stage_latencies_ms || {}).map(([k, v]) => `${k}: ${v.toFixed(1)}ms`).join(", ");
+      answerEl.appendChild(lat);
+    }
+
+    document.getElementById("textForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const query = document.getElementById("textInput").value.trim();
+      if (!query) return;
+      answerEl.textContent = "Thinking...";
+      const form = new FormData();
+      form.append("query", query);
+      const resp = await fetch(`${API_BASE}/ask/text`, { method: "POST", body: form });
+      renderResponse(await resp.json());
+    });
+
+    // --- Voice capture ---
+    let mediaRecorder, chunks = [];
+    const recordBtn = document.getElementById("recordBtn");
+
+    async function startRecording() {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      chunks = [];
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: "audio/wav" });
+        answerEl.textContent = "Transcribing + thinking...";
+        const form = new FormData();
+        form.append("file", blob, "query.wav");
+        const resp = await fetch(`${API_BASE}/ask/voice`, { method: "POST", body: form });
+        renderResponse(await resp.json());
+      };
+      mediaRecorder.start();
+      recordBtn.classList.add("recording");
+    }
+
+    function stopRecording() {
+      mediaRecorder?.stop();
+      recordBtn.classList.remove("recording");
+    }
+
+    recordBtn.addEventListener("mousedown", startRecording);
+    recordBtn.addEventListener("mouseup", stopRecording);
+    recordBtn.addEventListener("mouseleave", () => { if (mediaRecorder?.state === "recording") stopRecording(); });
+  </script>
+</body>
+</html>
