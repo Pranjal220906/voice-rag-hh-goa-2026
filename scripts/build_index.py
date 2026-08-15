@@ -1,11 +1,13 @@
-"""Loads ai4bharat/MSMARCO-XI, runs every chunking strategy over each
-document, embeds all resulting chunks, and upserts them into Qdrant. Also
-builds the BM25 sparse index and the corpus centroid used by the off-topic
-guardrail — both saved to disk so the API process can load them without
-re-embedding the whole corpus on startup.
+"""Loads ai4bharat/MSMARCO-XI (from a locally downloaded parquet file — HF's
+streaming API proved unreliable on flaky connections, so we read a file
+that's already sitting on disk via curl instead), runs every chunking
+strategy over each document, embeds all resulting chunks, and upserts them
+into Qdrant. Also builds the BM25 sparse index and the corpus centroid used
+by the off-topic guardrail — both saved to disk so the API process can load
+them without re-embedding the whole corpus on startup.
 
 Usage:
-    python scripts/build_index.py --limit 20000 --split train
+    python scripts/build_index.py --local-file data/hinval.parquet --limit 500
 """
 from __future__ import annotations
 
@@ -15,7 +17,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from datasets import load_dataset
+import pyarrow.parquet as pq
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -27,22 +29,53 @@ from app.vector_store import upsert_chunks  # noqa: E402
 
 ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "data"
 
+# MSMARCO-XI's actual schema (confirmed from the parquet file directly):
+# query, Answer, Eng_Query, Eng_Answer, query_id, query_type,
+# passages.English_passages / passages.Translated_passages / passages.is_selected
+QUERY_COL = "query"
+QUERY_ID_COL = "query_id"
+PASSAGES_COL = "passages"  # struct column: {English_passages, Translated_passages, is_selected}
 
-def main(dataset: str, split: str, limit: int, batch_size: int) -> None:
-    print(f"Loading {dataset} [{split}] (streaming, limit={limit})...")
-    ds = load_dataset(dataset, split=split, streaming=True)
+
+def iter_local_rows(path: str, limit: int, batch_size: int = 200):
+    """Stream rows out of a local parquet file in batches, so we never load
+    the whole (multi-GB) file into memory — only pull the columns we need.
+    `passages` is a nested struct column; to_pylist() resolves it into a
+    plain dict per row, so we pull Translated_passages (falling back to
+    English_passages) out of that dict rather than guessing a dotted name.
+    """
+    pf = pq.ParquetFile(path)
+    available = set(pf.schema_arrow.names)
+    columns = [c for c in (QUERY_COL, QUERY_ID_COL, PASSAGES_COL) if c in available]
+
+    count = 0
+    for batch in pf.iter_batches(batch_size=batch_size, columns=columns):
+        rows = batch.to_pylist()
+        for row in rows:
+            if count >= limit:
+                return
+            passages_struct = row.get(PASSAGES_COL) or {}
+            passages = (
+                passages_struct.get("Translated_passages")
+                or passages_struct.get("English_passages")
+                or []
+            )
+            yield {
+                "id": row.get(QUERY_ID_COL, count),
+                "query": row.get(QUERY_COL, ""),
+                "passages": passages,
+            }
+            count += 1
+
+
+def main(local_file: str, limit: int, batch_size: int) -> None:
+    print(f"Reading local file {local_file} (limit={limit})...")
 
     all_chunks = []
-    for i, row in enumerate(ds):
-        if i >= limit:
-            break
-        doc_id = str(row.get("id", i))
-        # MSMARCO-style rows typically carry a query + a list of passages;
-        # field names vary by config, so this is defensive.
-        passages = row.get("passages") or row.get("passage_text") or []
-        if isinstance(passages, dict):
-            passages = passages.get("passage_text", [])
-        text = " ".join(passages) if passages else str(row.get("passage", ""))
+    for i, row in enumerate(iter_local_rows(local_file, limit)):
+        doc_id = str(row["id"])
+        passages = row["passages"]
+        text = " ".join(p for p in passages if p) if passages else ""
         if not text.strip():
             continue
 
@@ -51,7 +84,7 @@ def main(dataset: str, split: str, limit: int, batch_size: int) -> None:
         )
         all_chunks.extend(chunks)
 
-        if (i + 1) % 500 == 0:
+        if (i + 1) % 100 == 0:
             print(f"  processed {i + 1} documents, {len(all_chunks)} chunks so far")
 
     print(f"Total chunks across all strategies: {len(all_chunks)}")
@@ -82,9 +115,12 @@ def main(dataset: str, split: str, limit: int, batch_size: int) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", default="ai4bharat/MSMARCO-XI")
-    parser.add_argument("--split", default="train")
-    parser.add_argument("--limit", type=int, default=20000)
-    parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument(
+        "--local-file",
+        default="data/hinval.parquet",
+        help="Path to a locally downloaded MSMARCO-XI parquet file",
+    )
+    parser.add_argument("--limit", type=int, default=500)
+    parser.add_argument("--batch-size", type=int, default=64)
     args = parser.parse_args()
-    main(args.dataset, args.split, args.limit, args.batch_size)
+    main(args.local_file, args.limit, args.batch_size)

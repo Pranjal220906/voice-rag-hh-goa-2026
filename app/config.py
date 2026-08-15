@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     rrf_k: int = 60  # reciprocal rank fusion constant
     min_relevance_score: float = 0.35  # pre-generation grounding gate
 
-    # Generation — Groq's free tier (OpenAI-compatible endpoint), no card needed
+    # Generation - Groq's free tier (OpenAI-compatible endpoint), no card needed
     llm_provider: str = "groq"
     llm_model: str = "llama-3.3-70b-versatile"
     llm_api_key: str = ""
@@ -42,4 +42,4 @@ class Settings(BaseSettings):
     stage_timeout_seconds: float = 8.0
 
 
-settings = Settings(
+settings = Settings()

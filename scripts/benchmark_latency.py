@@ -13,6 +13,7 @@ import argparse
 import asyncio
 import csv
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -55,6 +56,7 @@ async def run_benchmark(n: int, out_path: str) -> None:
         )
         for stage, ms in response.stage_latencies_ms.items():
             stage_totals.setdefault(stage, []).append(ms)
+        time.sleep(2.5)  # stay under Groq's free-tier requests-per-minute limit
 
     with open(out_path, "w", newline="") as f:
         fieldnames = sorted({key for row in rows for key in row})
