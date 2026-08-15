@@ -1,3 +1,5 @@
 .env
 __pycache__/
 *.pyc
+latency_report.csv
+data/
