@@ -1,40 +1,44 @@
-"""Lightweight multilingual E5 embedding wrapper."""
+"""Thin wrapper around the multilingual sentence-embedding model."""
 
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 
 import numpy as np
-
-# Keep CPU memory/thread usage low on small Render instances.
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("MKL_NUM_THREADS", "1")
 
 from app.config import settings
 
 
 @lru_cache(maxsize=1)
 def _model():
+    print("[EMBED] START MODEL LOAD", flush=True)
+
     from sentence_transformers import SentenceTransformer
 
-    model = SentenceTransformer(
-        settings.embedding_model,
-        device="cpu",
-    )
+    model = SentenceTransformer(settings.embedding_model)
 
-    # Avoid unnecessary long sequence allocations.
-    model.max_seq_length = 256
+    print("[EMBED] MODEL LOADED", flush=True)
 
     return model
 
 
 def embed_texts(texts: list[str]) -> np.ndarray:
     if not texts:
-        return np.zeros((0, settings.embedding_dim), dtype=np.float32)
+        return np.zeros(
+            (0, settings.embedding_dim),
+            dtype=np.float32,
+        )
 
-    vecs = _model().encode(
+    print(
+        f"[EMBED] START ENCODE: {len(texts)} text(s)",
+        flush=True,
+    )
+
+    model = _model()
+
+    print("[EMBED] GOT MODEL", flush=True)
+
+    vecs = model.encode(
         texts,
         normalize_embeddings=True,
         batch_size=1,
@@ -42,12 +46,22 @@ def embed_texts(texts: list[str]) -> np.ndarray:
         convert_to_numpy=True,
     )
 
+    print("[EMBED] ENCODE COMPLETE", flush=True)
+
     return np.asarray(vecs, dtype=np.float32)
 
 
 def embed_query(text: str) -> np.ndarray:
-    return embed_texts([f"query: {text}"])[0]
+    print("[EMBED] QUERY EMBEDDING START", flush=True)
+
+    result = embed_texts([f"query: {text}"])[0]
+
+    print("[EMBED] QUERY EMBEDDING COMPLETE", flush=True)
+
+    return result
 
 
 def embed_passages(texts: list[str]) -> np.ndarray:
-    return embed_texts([f"passage: {t}" for t in texts])
+    return embed_texts(
+        [f"passage: {t}" for t in texts]
+    )
