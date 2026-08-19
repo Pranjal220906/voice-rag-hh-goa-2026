@@ -15,7 +15,11 @@ from app.schemas import Chunk
 
 @lru_cache(maxsize=1)
 def client() -> QdrantClient:
-    return QdrantClient(url=settings.qdrant_url)
+    if settings.qdrant_api_key:
+        return QdrantClient(
+            url=settings.qdrant_url, api_key=settings.qdrant_api_key, timeout=60
+        )
+    return QdrantClient(url=settings.qdrant_url, timeout=60)
 
 
 def ensure_collection() -> None:

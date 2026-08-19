@@ -12,11 +12,12 @@ class Settings(BaseSettings):
 
     # Vector store
     qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str = ""
     qdrant_collection: str = "msmarco_xi_chunks"
 
     # Embeddings
-    embedding_model: str = "intfloat/multilingual-e5-base"
-    embedding_dim: int = 768
+    embedding_model: str = "intfloat/multilingual-e5-small"
+    embedding_dim: int = 384
 
     # Retrieval
     top_k_dense: int = 20
@@ -26,12 +27,12 @@ class Settings(BaseSettings):
     rrf_k: int = 60  # reciprocal rank fusion constant
     min_relevance_score: float = 0.35  # pre-generation grounding gate
 
-    # Generation - Groq's free tier (OpenAI-compatible endpoint), no card needed
+    # Generation — Groq's free tier (OpenAI-compatible endpoint), no card needed
     llm_provider: str = "groq"
-    llm_model: str = "llama-3.3-70b-versatile"
+    llm_model: str = "openai/gpt-oss-20b"
     llm_api_key: str = ""
     groq_api_url: str = "https://api.groq.com/openai/v1/chat/completions"
-    max_answer_tokens: int = 400
+    max_answer_tokens: int = 800
 
     # Guardrails
     hallucination_overlap_threshold: float = 0.4

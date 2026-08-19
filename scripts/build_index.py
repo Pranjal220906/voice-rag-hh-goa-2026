@@ -105,7 +105,7 @@ def main(local_file: str, limit: int, batch_size: int) -> None:
         pickle.dump(all_chunks, f)
 
     print("Computing corpus centroid for off-topic guardrail...")
-    stacked = np.vstack(all_vectors) if all_vectors else np.zeros((1, 768))
+    stacked = np.vstack(all_vectors) if all_vectors else np.zeros((1, 384))
     centroid = stacked.mean(axis=0)
     np.save(ARTIFACT_DIR / "corpus_centroid.npy", centroid)
     set_corpus_centroid(centroid)
