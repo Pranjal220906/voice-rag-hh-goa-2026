@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     qdrant_collection: str = "msmarco_xi_chunks"
 
     # Embeddings
-    embedding_model: str = "intfloat/multilingual-e5-small"
+    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     embedding_dim: int = 384
 
     # Retrieval
