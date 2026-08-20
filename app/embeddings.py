@@ -1,4 +1,4 @@
-"""Thin wrapper around the multilingual sentence-embedding model."""
+"""Thin wrapper around the multilingual sentence-embedding model (FastEmbed)."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from app.config import settings
 def _model():
     print("[EMBED] START MODEL LOAD", flush=True)
 
-    from sentence_transformers import SentenceTransformer
+    from fastembed import TextEmbedding
 
-    model = SentenceTransformer(settings.embedding_model)
+    model = TextEmbedding(model_name=settings.embedding_model)
 
     print("[EMBED] MODEL LOADED", flush=True)
 
@@ -38,13 +38,7 @@ def embed_texts(texts: list[str]) -> np.ndarray:
 
     print("[EMBED] GOT MODEL", flush=True)
 
-    vecs = model.encode(
-        texts,
-        normalize_embeddings=True,
-        batch_size=1,
-        show_progress_bar=False,
-        convert_to_numpy=True,
-    )
+    vecs = list(model.embed(texts))
 
     print("[EMBED] ENCODE COMPLETE", flush=True)
 
